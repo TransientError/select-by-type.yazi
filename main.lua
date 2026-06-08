@@ -1,5 +1,3 @@
---- @sync entry
-
 local categories = {
 	{ key = "i", desc = "Images", prefix = "image/" },
 	{ key = "v", desc = "Video", prefix = "video/" },
@@ -8,7 +6,7 @@ local categories = {
 	{ key = "p", desc = "PDF", prefix = "application/pdf" },
 }
 
-local function select_by_prefix(prefix)
+local select_by_prefix = ya.sync(function(_, prefix)
 	local tab = cx.active
 	local files = tab.current.files
 
@@ -19,13 +17,17 @@ local function select_by_prefix(prefix)
 		local file = files[i]
 		local mime = file:mime()
 		if mime and mime:find(prefix, 1, true) == 1 then
-			matching[#matching + 1] = file.url
+			matching[#matching + 1] = Url(file.url)
 			if not file:is_selected() then
 				all_selected = false
 			end
 		end
 	end
 
+	return matching, all_selected
+end)
+
+local function do_toggle(matching, all_selected)
 	if #matching == 0 then
 		ya.notify({ title = "select-by-type", content = "No matching files found (MIME not loaded?)", level = "warn", timeout = 3 })
 		return
@@ -44,13 +46,16 @@ local function entry(_, job)
 	-- Direct invocation with argument
 	if job.args and job.args[1] then
 		local arg = job.args[1]
+		local prefix
 		for _, cat in ipairs(categories) do
 			if cat.prefix:find(arg, 1, true) == 1 or cat.desc:lower() == arg then
-				select_by_prefix(cat.prefix)
-				return
+				prefix = cat.prefix
+				break
 			end
 		end
-		select_by_prefix(arg .. "/")
+		prefix = prefix or (arg .. "/")
+		local matching, all_selected = select_by_prefix(prefix)
+		do_toggle(matching, all_selected)
 		return
 	end
 
@@ -65,7 +70,8 @@ local function entry(_, job)
 		return
 	end
 
-	select_by_prefix(categories[idx].prefix)
+	local matching, all_selected = select_by_prefix(categories[idx].prefix)
+	do_toggle(matching, all_selected)
 end
 
 return { entry = entry }
